@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vegetable Nutrition Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            max-width: 400px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        h1 {
+            font-size: 24px;
+            color: #333;
+        }
+        video {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vegetable Nutrition Scanner</h1>
+        <video id="video" autoplay></video>
+        <button id="detect-button">Detect & Get Nutrition Info</button>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const resultDiv = document.getElementById('result');
+        let model;
+
+        // Load the object detection model
+        async function loadModel() {
+            model = await cocoSsd.load();
+            console.log("Model loaded");
+            Swal.fire("Model Loaded", "The detection model has been loaded successfully!", "success");
+        }
+
+        // Access the user's camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(error => {
+                console.error("Error accessing the camera:", error);
+                Swal.fire("Camera Error", "Could not access the camera.", "error");
+            });
+
+        // Detect the vegetable in the image
+        document.getElementById('detect-button').addEventListener('click', async () => {
+            if (!model) {
+                Swal.fire("Loading...", "Please wait while the model is loading.", "info");
+                return;
+            }
+
+            // Detect objects in the video frame
+            const predictions = await model.detect(video);
+            const vegetablePrediction = predictions.find(prediction =>
+                ["broccoli", "carrot", "tomato"].includes(prediction.class)
+            );
+
+            if (vegetablePrediction) {
+                const vegetableName = vegetablePrediction.class;
+                Swal.fire("Vegetable Detected", `Detected: ${vegetableName}. Fetching nutrition data...`, "info");
+
+                // Spoonacular API call
+                const apiKey = "43060fcd39984991bdac8557ed4eeab8";
+                const apiUrl = `https://api.spoonacular.com/food/ingredients/search?query=${vegetableName}&number=1&apiKey=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+
+                    if (data.results && data.results.length > 0) {
+                        const ingredientId = data.results[0].id;
+
+                        // Fetch detailed nutritional info using ingredient ID
+                        const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
+                        const nutritionResponse = await fetch(nutritionUrl);
+                        const nutritionData = await nutritionResponse.json();
+
+                        let nutritionInfo = `<h3>${nutritionData.name} (per 100g)</h3><p><strong>Calories:</strong> ${nutritionData.nutrition.nutrients[0].amount} ${nutritionData.nutrition.nutrients[0].unit}</p><ul>`;
+                        nutritionData.nutrition.nutrients.forEach(nutrient => {
+                            nutritionInfo += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
+                        });
+                        nutritionInfo += `</ul>`;
+
+                        resultDiv.innerHTML = nutritionInfo;
+                        Swal.fire("Nutrition Info Retrieved", `${nutritionData.name} nutrition data is now displayed.`, "success");
+                    } else {
+                        Swal.fire("No Data Found", "No nutritional information found for this vegetable.", "warning");
+                    }
+                } catch (error) {
+                    console.error("Error fetching data:", error);
+                    Swal.fire("Error", "There was an error retrieving the data.", "error");
+                }
+            } else {
+                Swal.fire("Vegetable Not Detected", "Please try again or adjust the vegetable position.", "warning");
+            }
+        });
+
+        loadModel();
+    </script>
+</body>
+</html>

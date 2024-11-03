@@ -33,6 +33,8 @@
             max-width: 100%;
             border-radius: 8px;
             margin: 10px 0;
+            display: block; /* Ensure the video is displayed as a block */
+            width: 100%; /* Ensure the video takes the full width */
         }
         button {
             padding: 10px 20px;
@@ -122,8 +124,13 @@
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
-            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = currentStream;
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (error) {
+                console.error("Error accessing the camera: ", error);
+                showAlert("Camera Error", "Could not access the camera. Please check your settings.", "error");
+            }
         }
 
         // Start the back camera by default
@@ -221,40 +228,47 @@
         // Function to fetch recipes based on the vegetable name
         async function fetchRecipes(vegetableName) {
             const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-            const recipeUrl = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${vegetableName}&number=3&apiKey=${apiKey}`;
+            const recipesUrl = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${vegetableName}&apiKey=${apiKey}`;
+
             try {
-                const response = await fetch(recipeUrl);
+                const response = await fetch(recipesUrl);
                 const recipes = await response.json();
 
-                // Clear previous recipes
-                recipeContainer.innerHTML = '';
+                recipeContainer.innerHTML = ''; // Clear previous results
+                if (recipes.length === 0) {
+                    showAlert("No Recipes Found", "No recipes found for this vegetable.", "warning");
+                } else {
+                    recipes.forEach(recipe => {
+                        const recipeCard = document.createElement('div');
+                        recipeCard.className = 'recipe-card';
+                        recipeCard.innerHTML = `
+                            <img src="${recipe.image}" alt="${recipe.title}">
+                            <h4>${recipe.title}</h4>
+                            <p>Ready in ${recipe.readyInMinutes} minutes</p>
+                        `;
+                        recipeContainer.appendChild(recipeCard);
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching recipes:", error);
+                showAlert("Error", "There was an error retrieving the recipes.", "error");
+            }
+        }
 
-                // Display recipes in card format
-                recipes.forEach(recipe => {
-                    const recipeCard = document.createElement('div');
-                    recipeCard.classList.add('recipe-card');
-                    recipeCard.innerHTML = `
-                        <img src="${recipe.image}" alt="${recipe.title}">
-                        <h4>${recipe.title}</h4>
-                        <p>Used in ${recipe.usedIngredientCount} ingredients</p>
-                    `;
-                    recipeContainer.appendChild(recipeCard);
-                });
+        // Function to display alerts using SweetAlert
+        function showAlert(title, text, icon) {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: icon,
+                showConfirmButton: false,
+                timer: 3000,
+                position: 'top-end'
+            });
+        }
 
-                //
-                     // Function to display alerts using SweetAlert
-    function showAlert(title, text, icon) {
-        Swal.fire({
-            title: title,
-            text: text,
-            icon: icon,
-            showConfirmButton: false,
-            timer: 3000
-        });
-    }
-
-    // Load the model on page load
-    window.onload = loadModel;
-</script>
+        // Load the model on page load
+        window.onload = loadModel;
+    </script>
 </body>
 </html>

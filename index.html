@@ -50,31 +50,6 @@
         button:hover {
             background-color: #45a049;
         }
-        .recipe-card {
-            display: inline-block;
-            width: 150px;
-            margin: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            cursor: pointer;
-        }
-        .recipe-card img {
-            width: 100%;
-            height: 100px;
-            object-fit: cover;
-        }
-        .recipe-card h4 {
-            font-size: 14px;
-            margin: 5px;
-        }
-        .recipe-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-top: 20px;
-        }
         .loader {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3498db;
@@ -100,51 +75,26 @@
             <button id="switch-camera-button">Switch Camera</button>
         </div>
         <div id="result"></div>
-        <div class="recipe-container" id="recipe-container"></div>
-        <canvas id="canvas" style="display:none;"></canvas> <!-- Canvas for capturing image -->
-        <div class="loader" id="loader"></div> <!-- Loader element -->
-    </div>
-
-    <div class="container" id="detail-container" style="display:none;">
-        <button id="back-button">Back</button>
-        <h1 id="detail-title"></h1>
-        <div id="nutrition-info"></div>
-        <div id="detail-recipe-container" class="recipe-container"></div>
+        <div class="loader" id="loader"></div>
+        <canvas id="canvas" style="display:none;"></canvas>
     </div>
 
     <script>
-        let video;
         let currentStream;
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-        const loader = document.getElementById('loader');
-        const recipeContainer = document.getElementById('recipe-container');
-        const detailContainer = document.getElementById('detail-container');
-        const detailTitle = document.getElementById('detail-title');
-        const nutritionInfo = document.getElementById('nutrition-info');
-        const detailRecipeContainer = document.getElementById('detail-recipe-container');
-        const resultDiv = document.getElementById('result');
-        const mainContainer = document.getElementById('main-container');
+        let video = document.getElementById('video');
+        let useFrontCamera = false;
 
-        let useFrontCamera = false; // Track which camera to use
-
-        async function setup() {
-            await startCamera(useFrontCamera);
-        }
-
-        async function startCamera(frontCamera) {
-            // Stop the current stream if it exists
+        async function startCamera() {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
-
+            
             const constraints = {
-                video: { facingMode: frontCamera ? "user" : "environment" }
+                video: { facingMode: useFrontCamera ? "user" : "environment" }
             };
 
             try {
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                video = document.getElementById('video');
                 video.srcObject = currentStream;
             } catch (error) {
                 console.error("Error accessing the camera:", error);
@@ -153,180 +103,31 @@
         }
 
         document.getElementById('capture-button').addEventListener('click', async () => {
-            loader.style.display = 'block'; // Show loader
-
-            // Capture the frame
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = canvas.toDataURL('image/png');
 
-            // Send the captured image to YOLOv5 API
-            await detectVegetables(imageData);
+            // Simulate vegetable detection
+            loader.style.display = 'block'; // Show loader
+            await detectVegetables(); // Call the detection function
         });
 
-        async function detectVegetables(imageData) {
-            try {
-                const response = await fetch('YOUR_YOLO_API_ENDPOINT', { // Replace with your YOLO API URL
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ image: imageData })
-                });
-                const detectedData = await response.json();
+        async function detectVegetables() {
+            // Simulating a delay for detection
+            setTimeout(() => {
                 loader.style.display = 'none'; // Hide loader
-
-                if (detectedData && detectedData.objects.length > 0) {
-                    const detectedVegetables = detectedData.objects.map(obj => obj.name);
-                    resultDiv.innerHTML = `Detected: ${detectedVegetables.join(', ')}`;
-                    recipeContainer.innerHTML = ""; // Clear previous recipes
-
-                    detectedVegetables.forEach(vegetable => {
-                        fetchNutritionData(vegetable);
-                    });
-                } else {
-                    showAlert("No Vegetables Detected", "Please try again.", "warning");
-                }
-            } catch (error) {
-                console.error("Error detecting vegetables:", error);
-                showAlert("Error", "There was an error detecting vegetables.", "error");
-            }
+                // Here you can implement your vegetable detection logic
+                // For now, just show an alert with a placeholder message
+                showAlert("Detected", `Vegetable detected!`, "success");
+                // You can later fetch actual nutritional data based on the detected vegetable
+            }, 2000);
         }
-
-        async function fetchNutritionData(vegetableName) {
-            const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-            const apiUrl = `https://api.spoonacular.com/food/ingredients/search?query=${vegetableName}&number=1&apiKey=${apiKey}`;
-
-            try {
-                const response = await fetch(apiUrl);
-                const data = await response.json();
-
-                if (data.results && data.results.length > 0) {
-                    const ingredientId = data.results[0].id;
-
-                    // Fetch detailed nutritional info using ingredient ID
-                    const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
-                    const nutritionResponse = await fetch(nutritionUrl);
-                    const nutritionInfoData = await nutritionResponse.json();
-
-                    let nutritionHtml = `<h3>${nutritionInfoData.name} (per 100g)</h3>
-                                         <p><strong>Calories:</strong> ${nutritionInfoData.nutrition.nutrients[0].amount} ${nutritionInfoData.nutrition.nutrients[0].unit}</p>
-                                         <ul>`;
-                    nutritionInfoData.nutrition.nutrients.forEach(nutrient => {
-                        nutritionHtml += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
-                    });
-                    nutritionHtml += `</ul>`;
-
-                    const recipeCard = document.createElement('div');
-                    recipeCard.className = 'recipe-card';
-                    recipeCard.innerHTML = `
-                        <h4>${nutritionInfoData.name}</h4>
-                        <p>Calories: ${nutritionInfoData.nutrition.nutrients[0].amount}</p>
-                    `;
-                    recipeCard.addEventListener('click', () => showDetails(nutritionInfoData));
-                    recipeContainer.appendChild(recipeCard);
-                } else {
-                    showAlert("Nutrition Not Found", `No nutritional information found for ${vegetableName}.`, "warning");
-                }
-            } catch (error) {
-                console.error("Error fetching nutrition data:", error);
-                showAlert("Error", "There was an error retrieving nutritional information.", "error");
-            }
-        }
-
-        function showDetails(nutritionData) {
-            mainContainer.style.display = 'none';
-            detailContainer.style.display = 'block';
-            detailTitle.innerText = nutritionData.name;
-            nutritionInfo.innerHTML = `<p>Calories: ${nutritionData.nutrition.nutrients[0].amount} ${nutritionData.nutrition.nutrients[0].unit}</p>`;
-            detailRecipeContainer.innerHTML = ""; // Clear previous details
-
-            // Show recipes based on detected vegetable
-            fetchRecipes(nutritionData.name);
-        }
-
-        async function fetchRecipes(vegetableName) {
-            const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-            const recipesUrl = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${vegetableName}&number=5&apiKey=${apiKey}`;
-
-            try {
-                const response = await fetch(recipesUrl);
-                const recipes = await response.json();
-                displayRecipes(recipes);
-            } catch (error) {
-                console.error("Error fetching recipes:", error);
-                showAlert("Error", "There was an error retrieving recipes.", "error");
-            }
-        }
-
-        function displayRecipes(recipes) {
-            detailRecipeContainer.innerHTML = ""; // Clear previous results
-
-            recipes.forEach(recipe => {
-                const recipeCard = document.createElement('div');
-                recipeCard.className = 'recipe-card';
-                recipeCard.innerHTML = `
-                    <img src="${recipe.image}" alt="${recipe.title}">
-                    <h4>${recipe.title}</h4>
-                `;
-                recipeCard.addEventListener('click', () => showRecipeDetails(recipe.id));
-                detailRecipeContainer.appendChild(recipeCard);
-            });
-        }
-
-        async function showRecipeDetails(recipeId) {
-            const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-            const recipeDetailsUrl = `https://api.spoonacular.com/recipes/${recipeId}/information?apiKey=${apiKey}`;
-
-            try {
-                const response = await fetch(recipeDetailsUrl);
-                const recipeDetails = await response.json();
-
-                const cookingInstructions = recipeDetails.instructions || "No cooking instructions available.";
-                showCookingInstructions(recipeDetails.title, cookingInstructions);
-            } catch (error) {
-                console.error("Error fetching recipe details:", error);
-                showAlert("Error", "There was an error retrieving recipe details.", "error");
-            }
-        }
-
-        function showCookingInstructions(title, instructions) {
-            Swal.fire({
-                title: title,
-                text: instructions,
-                icon: 'info',
-                showCancelButton: true,
-                confirmButtonText: 'Read Aloud',
-                cancelButtonText: 'Close',
-                input: 'select',
-                inputOptions: {
-                    'en': 'English',
-                    'te': 'Telugu'
-                },
-                inputPlaceholder: 'Select Language',
-                preConfirm: (language) => {
-                    if (!language) {
-                        Swal.showValidationMessage('Please select a language');
-                    } else {
-                        speak(instructions, language);
-                    }
-                }
-            });
-        }
-
-        function speak(text, language) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = language === 'te' ? 'te-IN' : 'en-US'; // Telugu or English
-            speechSynthesis.speak(utterance);
-        }
-
-        document.getElementById('back-button').addEventListener('click', () => {
-            detailContainer.style.display = 'none';
-            mainContainer.style.display = 'block';
-        });
 
         document.getElementById('switch-camera-button').addEventListener('click', () => {
             useFrontCamera = !useFrontCamera; // Toggle camera
-            startCamera(useFrontCamera);
+            startCamera();
         });
 
         function showAlert(title, text, icon) {
@@ -336,12 +137,11 @@
                 icon: icon,
                 showConfirmButton: false,
                 timer: 3000,
-                width: '300px',
                 position: 'top-end'
             });
         }
 
-        window.onload = setup;
+        window.onload = startCamera; // Start camera on load
     </script>
 </body>
 </html>

@@ -57,7 +57,11 @@
     <div class="container">
         <h1>Vegetable Nutrition Scanner</h1>
         <video id="video" autoplay></video>
-        <button id="detect-button">Detect & Get Nutrition Info</button>
+        <div>
+            <button id="front-camera">Front Camera</button>
+            <button id="back-camera">Back Camera</button>
+            <button id="detect-button">Detect & Get Nutrition Info</button>
+        </div>
         <div id="result"></div>
     </div>
 
@@ -65,28 +69,41 @@
         const video = document.getElementById('video');
         const resultDiv = document.getElementById('result');
         let model;
+        let currentStream;
 
         // Load the object detection model
         async function loadModel() {
             model = await cocoSsd.load();
             console.log("Model loaded");
-            Swal.fire("Model Loaded", "The detection model has been loaded successfully!", "success");
+            showAlert("Model Loaded", "The detection model has been loaded successfully!", "success");
         }
 
         // Access the user's camera
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                video.srcObject = stream;
-            })
-            .catch(error => {
-                console.error("Error accessing the camera:", error);
-                Swal.fire("Camera Error", "Could not access the camera.", "error");
-            });
+        async function startCamera(constraints) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = currentStream;
+        }
+
+        // Start the back camera by default
+        startCamera({ video: { facingMode: "environment" } });
+
+        // Switch to front camera
+        document.getElementById('front-camera').addEventListener('click', () => {
+            startCamera({ video: { facingMode: "user" } });
+        });
+
+        // Switch to back camera
+        document.getElementById('back-camera').addEventListener('click', () => {
+            startCamera({ video: { facingMode: "environment" } });
+        });
 
         // Detect the vegetable in the image
         document.getElementById('detect-button').addEventListener('click', async () => {
             if (!model) {
-                Swal.fire("Loading...", "Please wait while the model is loading.", "info");
+                showAlert("Loading...", "Please wait while the model is loading.", "info");
                 return;
             }
 
@@ -98,7 +115,7 @@
 
             if (vegetablePrediction) {
                 const vegetableName = vegetablePrediction.class;
-                Swal.fire("Vegetable Detected", `Detected: ${vegetableName}. Fetching nutrition data...`, "info");
+                showAlert("Vegetable Detected", `Detected: ${vegetableName}. Fetching nutrition data...`, "info");
 
                 // Spoonacular API call
                 const apiKey = "43060fcd39984991bdac8557ed4eeab8";
@@ -116,25 +133,46 @@
                         const nutritionResponse = await fetch(nutritionUrl);
                         const nutritionData = await nutritionResponse.json();
 
-                        let nutritionInfo = `<h3>${nutritionData.name} (per 100g)</h3><p><strong>Calories:</strong> ${nutritionData.nutrition.nutrients[0].amount} ${nutritionData.nutrition.nutrients[0].unit}</p><ul>`;
+                        let nutritionInfo = `<h3>${nutritionData.name} (per 100g)</h3>
+                                             <p><strong>Calories:</strong> ${nutritionData.nutrition.nutrients[0].amount} ${nutritionData.nutrition.nutrients[0].unit}</p>
+                                             <ul>`;
                         nutritionData.nutrition.nutrients.forEach(nutrient => {
                             nutritionInfo += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
                         });
                         nutritionInfo += `</ul>`;
 
                         resultDiv.innerHTML = nutritionInfo;
-                        Swal.fire("Nutrition Info Retrieved", `${nutritionData.name} nutrition data is now displayed.`, "success");
+                        Swal.fire({
+                            title: `${nutritionData.name} Nutrition Info`,
+                            html: nutritionInfo,
+                            icon: 'success',
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 5000
+                        });
                     } else {
-                        Swal.fire("No Data Found", "No nutritional information found for this vegetable.", "warning");
+                        showAlert("No Data Found", "No nutritional information found for this vegetable.", "warning");
                     }
                 } catch (error) {
                     console.error("Error fetching data:", error);
-                    Swal.fire("Error", "There was an error retrieving the data.", "error");
+                    showAlert("Error", "There was an error retrieving the data.", "error");
                 }
             } else {
-                Swal.fire("Vegetable Not Detected", "Please try again or adjust the vegetable position.", "warning");
+                showAlert("Vegetable Not Detected", "Please try again or adjust the vegetable position.", "warning");
             }
         });
+
+        // SweetAlert wrapper to customize positioning
+        function showAlert(title, text, icon) {
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: icon,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        }
 
         loadModel();
     </script>

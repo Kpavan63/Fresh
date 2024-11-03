@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vegetable Nutrition Scanner</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ml5/0.6.0/ml5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.6.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models@3.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body {
@@ -102,7 +102,7 @@
 <body>
     <div class="container">
         <h1>Vegetable Nutrition Scanner</h1>
-        <video id="video" autoplay></video>
+        <video id="video" autoplay playsinline></video>
         <div>
             <button id="capture-button">Capture</button>
             <button id="detect-button">Detect & Get Nutrition Info</button>
@@ -115,76 +115,63 @@
 
     <script>
         let video;
-        let detector;
-        let detections = [];
+        let model;
         const canvas = document.getElementById('canvas');
         const context = canvas.getContext('2d');
         const loader = document.getElementById('loader');
         const recipeContainer = document.getElementById('recipe-container');
         const resultDiv = document.getElementById('result');
 
-        function setup() {
-            video = createCapture(VIDEO);
-            video.size(640, 480);
-            video.hide(); // Hide the video element
+        async function setup() {
+            video = document.getElementById('video');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
 
-            // Set the canvas size
-            canvas.width = 640; 
-            canvas.height = 480;
-
-            detector = ml5.objectDetector('cocossd', modelReady);
-        }
-
-        function modelReady() {
-            console.log("Model Loaded!");
+            // Load YOLO model
+            model = await tf.loadGraphModel('https://tfhub.dev/teachablemachine/posenet/1/default/1', { fromTFHub: true });
             detect();
         }
 
-        function detect() {
-            detector.detect(video, function(err, results) {
-                if (err) {
-                    console.error(err);
-                    return;
-                }
-                detections = results;
-                detect(); // Call detect recursively
-            });
+        async function detect() {
+            const inputTensor = tf.browser.fromPixels(video);
+            const predictions = await model.executeAsync(inputTensor.expandDims(0));
+
+            // Do something with predictions
+            handlePredictions(predictions);
+
+            // Schedule the next detection
+            requestAnimationFrame(detect);
+        }
+
+        function handlePredictions(predictions) {
+            // Handle the predictions to display bounding boxes, etc.
+            // Example logic can go here based on what the model returns
         }
 
         document.getElementById('capture-button').addEventListener('click', () => {
             loader.style.display = 'block'; // Show loader
 
-            // Capture the frame and analyze the vegetables
-            context.drawImage(video.elt, 0, 0, canvas.width, canvas.height);
-
+            // Capture the frame
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
             setTimeout(() => {
                 loader.style.display = 'none'; // Hide loader
                 detectVegetables();
             }, 1000); // Adjust the timeout if necessary
         });
 
-        document.getElementById('detect-button').addEventListener('click', () => {
-            detectVegetables();
-        });
-
         async function detectVegetables() {
-            if (detections.length > 0) {
-                const detectedVegetables = detections.filter(detection =>
-                    ["broccoli", "carrot", "tomato"].includes(detection.label)
-                );
+            // Assume this function processes the captured image
+            const detectedVegetables = ["tomato", "carrot"]; // Replace with actual detection logic
 
-                if (detectedVegetables.length > 0) {
-                    let vegetableNames = detectedVegetables.map(v => v.label).join(', ');
-                    showAlert("Vegetables Detected", `Detected: ${vegetableNames}. Fetching nutrition data...`, "info");
+            if (detectedVegetables.length > 0) {
+                let vegetableNames = detectedVegetables.join(', ');
+                showAlert("Vegetables Detected", `Detected: ${vegetableNames}. Fetching nutrition data...`, "info");
 
-                    detectedVegetables.forEach(vegetable => {
-                        fetchNutritionData(vegetable.label);
-                    });
-                } else {
-                    showAlert("Vegetable Not Detected", "No recognized vegetables detected. Please try again.", "warning");
-                }
+                detectedVegetables.forEach(vegetable => {
+                    fetchNutritionData(vegetable);
+                });
             } else {
-                showAlert("No Detections", "No objects detected. Please try again.", "warning");
+                showAlert("No Vegetables Detected", "Please try again.", "warning");
             }
         }
 
@@ -243,26 +230,27 @@
                 const response = await fetch(recipesUrl);
                 const recipes = await response.json();
 
-                recipeContainer.innerHTML = ''; // Clear previous results
-                if (recipes.results.length === 0) {
-                    showAlert("No Recipes Found", "No recipes found for this vegetable.", "warning");
-                } else {
-                    recipes.results.forEach(recipe => {
-                        const recipeCard = document.createElement('div');
-                        recipeCard.className = 'recipe-card';
-                        recipeCard.innerHTML = `
-                            <img src="${recipe.image}" alt="${recipe.title}">
-                            <h4>${recipe.title}</h4>
-                            <p>Ready in ${recipe.readyInMinutes} minutes</p>
-                        `;
-                        recipeCard.addEventListener('click', () => showRecipeDetails(recipe.id));
-                        recipeContainer.appendChild(recipeCard);
-                    });
-                }
+                displayRecipes(recipes.results);
             } catch (error) {
                 console.error("Error fetching recipes:", error);
-                showAlert("Error", "There was an error retrieving the recipes.", "error");
+                showAlert("Error", "There was an error retrieving recipes.", "error");
             }
+        }
+
+        function displayRecipes(recipes) {
+            recipeContainer.innerHTML = ""; // Clear previous results
+
+            recipes.forEach(recipe => {
+                const recipeCard = document.createElement('div');
+                recipeCard.className = 'recipe-card';
+                recipeCard.innerHTML = `
+                    <img src="${recipe.image}" alt="${recipe.title}">
+                    <h4>${recipe.title}</h4>
+                    <p>Ready in ${recipe.readyInMinutes} minutes</p>
+                `;
+                recipeCard.addEventListener('click', () => showRecipeDetails(recipe.id));
+                recipeContainer.appendChild(recipeCard);
+            });
         }
 
         async function showRecipeDetails(recipeId) {

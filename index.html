@@ -85,6 +85,21 @@
         #canvas {
             display: none;
         }
+        /* Loader styles */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            display: none; /* Hidden by default */
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -100,6 +115,7 @@
         <div id="result"></div>
         <div class="recipe-container" id="recipe-container"></div>
         <canvas id="canvas"></canvas>
+        <div class="loader" id="loader"></div> <!-- Loader element -->
     </div>
 
     <script>
@@ -108,6 +124,7 @@
         const recipeContainer = document.getElementById('recipe-container');
         const canvas = document.getElementById('canvas');
         const context = canvas.getContext('2d');
+        const loader = document.getElementById('loader');
         let model;
         let currentStream;
 
@@ -163,11 +180,16 @@
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+            // Show loader animation
+            loader.style.display = 'block';
+
             // Detect objects in the video frame
             const predictions = await model.detect(canvas);
             const detectedVegetables = predictions.filter(prediction =>
                 ["broccoli", "carrot", "tomato"].includes(prediction.class)
             );
+
+            loader.style.display = 'none'; // Hide loader after detection
 
             if (detectedVegetables.length > 0) {
                 let vegetableNames = detectedVegetables.map(v => v.class).join(', ');
@@ -214,38 +236,37 @@
                     Swal.fire({
                         title: `${nutritionInfo.name} Nutrition Info`,
                         html: nutritionHtml,
-                        icon: 'success',
-                        width: '400px', // Set a width for the popup
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 5000
+                        icon: 'info',
+                        showConfirmButton: true,
+                        width: '300px', // Adjust width for smaller popup
+                        position: 'top-end'
                     });
 
-                    // Fetch recipe suggestions
+                    // Fetch and display recipes based on the detected vegetable
                     fetchRecipes(vegetableName);
                 } else {
-                    showAlert("No Data Found", `No nutritional information found for ${vegetableName}.`, "warning");
+                    showAlert("Nutrition Not Found", `No nutritional information found for ${vegetableName}.`, "warning");
                 }
             } catch (error) {
-                console.error("Error fetching data:", error);
-                showAlert("Error", "There was an error retrieving the data.", "error");
+                console.error("Error fetching nutrition data:", error);
+                showAlert("Error", "There was an error retrieving nutrition information.", "error");
             }
         }
 
-        // Function to fetch recipes based on the vegetable name
+        // Function to fetch recipes for the detected vegetable
         async function fetchRecipes(vegetableName) {
             const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-            const recipesUrl = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${vegetableName}&apiKey=${apiKey}`;
+            const recipesUrl = `https://api.spoonacular.com/recipes/complexSearch?query=${vegetableName}&apiKey=${apiKey}`;
 
             try {
                 const response = await fetch(recipesUrl);
                 const recipes = await response.json();
 
                 recipeContainer.innerHTML = ''; // Clear previous results
-                if (recipes.length === 0) {
+                if (recipes.results.length === 0) {
                     showAlert("No Recipes Found", "No recipes found for this vegetable.", "warning");
                 } else {
-                    recipes.forEach(recipe => {
+                    recipes.results.forEach(recipe => {
                         const recipeCard = document.createElement('div');
                         recipeCard.className = 'recipe-card';
                         recipeCard.innerHTML = `

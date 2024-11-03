@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vegetable Nutrition Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.6.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-models@3.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body {
@@ -99,6 +97,7 @@
         <video id="video" autoplay playsinline></video>
         <div>
             <button id="capture-button">Capture</button>
+            <button id="switch-camera-button">Switch Camera</button>
         </div>
         <div id="result"></div>
         <div class="recipe-container" id="recipe-container"></div>
@@ -115,7 +114,7 @@
 
     <script>
         let video;
-        let model;
+        let currentStream;
         const canvas = document.getElementById('canvas');
         const context = canvas.getContext('2d');
         const loader = document.getElementById('loader');
@@ -127,63 +126,69 @@
         const resultDiv = document.getElementById('result');
         const mainContainer = document.getElementById('main-container');
 
+        let useFrontCamera = false; // Track which camera to use
+
         async function setup() {
-            video = document.getElementById('video');
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
-
-            // Load YOLO model
-            model = await tf.loadGraphModel('https://tfhub.dev/teachablemachine/posenet/1/default/1', { fromTFHub: true });
-            detect();
+            await startCamera(useFrontCamera);
         }
 
-        async function detect() {
-            const inputTensor = tf.browser.fromPixels(video);
-            const predictions = await model.executeAsync(inputTensor.expandDims(0));
+        async function startCamera(frontCamera) {
+            // Stop the current stream if it exists
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
 
-            // Do something with predictions
-            handlePredictions(predictions);
+            const constraints = {
+                video: { facingMode: frontCamera ? "user" : "environment" }
+            };
 
-            // Schedule the next detection
-            requestAnimationFrame(detect);
-        }
-
-        function handlePredictions(predictions) {
-            // Dummy example to simulate detected vegetables
-            // Replace this with actual logic based on predictions
-            const detectedVegetables = ["tomato", "carrot"]; // This is where actual detection results would go
-            if (detectedVegetables.length > 0) {
-                resultDiv.innerHTML = `Detected: ${detectedVegetables.join(', ')}`;
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video = document.getElementById('video');
+                video.srcObject = currentStream;
+            } catch (error) {
+                console.error("Error accessing the camera:", error);
+                showAlert("Camera Error", "Could not access the camera. Please check permissions.", "error");
             }
         }
 
-        document.getElementById('capture-button').addEventListener('click', () => {
+        document.getElementById('capture-button').addEventListener('click', async () => {
             loader.style.display = 'block'; // Show loader
 
             // Capture the frame
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            setTimeout(() => {
-                loader.style.display = 'none'; // Hide loader
-                detectVegetables();
-            }, 1000); // Adjust the timeout if necessary
+            const imageData = canvas.toDataURL('image/png');
+
+            // Send the captured image to YOLOv5 API
+            await detectVegetables(imageData);
         });
 
-        async function detectVegetables() {
-            // Assume this function processes the captured image
-            const detectedVegetables = ["tomato", "carrot"]; // Replace with actual detection logic
-
-            if (detectedVegetables.length > 0) {
-                let vegetableNames = detectedVegetables.join(', ');
-                showAlert("Vegetables Detected", `Detected: ${vegetableNames}. Fetching nutrition data...`, "info");
-
-                // Clear previous results
-                recipeContainer.innerHTML = ""; 
-
-                detectedVegetables.forEach(vegetable => {
-                    fetchNutritionData(vegetable);
+        async function detectVegetables(imageData) {
+            try {
+                const response = await fetch('YOUR_YOLO_API_ENDPOINT', { // Replace with your YOLO API URL
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
                 });
-            } else {
-                showAlert("No Vegetables Detected", "Please try again.", "warning");
+                const detectedData = await response.json();
+                loader.style.display = 'none'; // Hide loader
+
+                if (detectedData && detectedData.objects.length > 0) {
+                    const detectedVegetables = detectedData.objects.map(obj => obj.name);
+                    resultDiv.innerHTML = `Detected: ${detectedVegetables.join(', ')}`;
+                    recipeContainer.innerHTML = ""; // Clear previous recipes
+
+                    detectedVegetables.forEach(vegetable => {
+                        fetchNutritionData(vegetable);
+                    });
+                } else {
+                    showAlert("No Vegetables Detected", "Please try again.", "warning");
+                }
+            } catch (error) {
+                console.error("Error detecting vegetables:", error);
+                showAlert("Error", "There was an error detecting vegetables.", "error");
             }
         }
 
@@ -317,6 +322,11 @@
         document.getElementById('back-button').addEventListener('click', () => {
             detailContainer.style.display = 'none';
             mainContainer.style.display = 'block';
+        });
+
+        document.getElementById('switch-camera-button').addEventListener('click', () => {
+            useFrontCamera = !useFrontCamera; // Toggle camera
+            startCamera(useFrontCamera);
         });
 
         function showAlert(title, text, icon) {

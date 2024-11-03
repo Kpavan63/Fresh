@@ -24,6 +24,9 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         h1 {
             font-size: 24px;
@@ -49,10 +52,6 @@
         button:hover {
             background-color: #45a049;
         }
-        #result {
-            margin-top: 20px;
-            text-align: left;
-        }
         .recipe-card {
             display: inline-block;
             width: 150px;
@@ -71,11 +70,6 @@
         .recipe-card h4 {
             font-size: 14px;
             margin: 5px;
-        }
-        .recipe-card p {
-            font-size: 12px;
-            margin: 5px;
-            color: #666;
         }
         .recipe-container {
             display: flex;
@@ -100,17 +94,23 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="main-container">
         <h1>Vegetable Nutrition Scanner</h1>
         <video id="video" autoplay playsinline></video>
         <div>
             <button id="capture-button">Capture</button>
-            <button id="detect-button">Detect & Get Nutrition Info</button>
         </div>
         <div id="result"></div>
         <div class="recipe-container" id="recipe-container"></div>
         <canvas id="canvas" style="display:none;"></canvas> <!-- Canvas for capturing image -->
         <div class="loader" id="loader"></div> <!-- Loader element -->
+    </div>
+
+    <div class="container" id="detail-container" style="display:none;">
+        <button id="back-button">Back</button>
+        <h1 id="detail-title"></h1>
+        <div id="nutrition-info"></div>
+        <div id="detail-recipe-container" class="recipe-container"></div>
     </div>
 
     <script>
@@ -120,7 +120,12 @@
         const context = canvas.getContext('2d');
         const loader = document.getElementById('loader');
         const recipeContainer = document.getElementById('recipe-container');
+        const detailContainer = document.getElementById('detail-container');
+        const detailTitle = document.getElementById('detail-title');
+        const nutritionInfo = document.getElementById('nutrition-info');
+        const detailRecipeContainer = document.getElementById('detail-recipe-container');
         const resultDiv = document.getElementById('result');
+        const mainContainer = document.getElementById('main-container');
 
         async function setup() {
             video = document.getElementById('video');
@@ -144,8 +149,12 @@
         }
 
         function handlePredictions(predictions) {
-            // Handle the predictions to display bounding boxes, etc.
-            // Example logic can go here based on what the model returns
+            // Dummy example to simulate detected vegetables
+            // Replace this with actual logic based on predictions
+            const detectedVegetables = ["tomato", "carrot"]; // This is where actual detection results would go
+            if (detectedVegetables.length > 0) {
+                resultDiv.innerHTML = `Detected: ${detectedVegetables.join(', ')}`;
+            }
         }
 
         document.getElementById('capture-button').addEventListener('click', () => {
@@ -166,6 +175,9 @@
             if (detectedVegetables.length > 0) {
                 let vegetableNames = detectedVegetables.join(', ');
                 showAlert("Vegetables Detected", `Detected: ${vegetableNames}. Fetching nutrition data...`, "info");
+
+                // Clear previous results
+                recipeContainer.innerHTML = ""; 
 
                 detectedVegetables.forEach(vegetable => {
                     fetchNutritionData(vegetable);
@@ -189,48 +201,52 @@
                     // Fetch detailed nutritional info using ingredient ID
                     const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
                     const nutritionResponse = await fetch(nutritionUrl);
-                    const nutritionInfo = await nutritionResponse.json();
+                    const nutritionInfoData = await nutritionResponse.json();
 
-                    let nutritionHtml = `<h3>${nutritionInfo.name} (per 100g)</h3>
-                                         <p><strong>Calories:</strong> ${nutritionInfo.nutrition.nutrients[0].amount} ${nutritionInfo.nutrition.nutrients[0].unit}</p>
+                    let nutritionHtml = `<h3>${nutritionInfoData.name} (per 100g)</h3>
+                                         <p><strong>Calories:</strong> ${nutritionInfoData.nutrition.nutrients[0].amount} ${nutritionInfoData.nutrition.nutrients[0].unit}</p>
                                          <ul>`;
-                    nutritionInfo.nutrition.nutrients.forEach(nutrient => {
+                    nutritionInfoData.nutrition.nutrients.forEach(nutrient => {
                         nutritionHtml += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
                     });
                     nutritionHtml += `</ul>`;
 
-                    resultDiv.innerHTML += nutritionHtml; // Append results
-
-                    // Show nutritional info in a smaller popup
-                    Swal.fire({
-                        title: `${nutritionInfo.name} Nutrition Info`,
-                        html: nutritionHtml,
-                        icon: 'info',
-                        showConfirmButton: true,
-                        width: '300px', // Adjust width for smaller popup
-                        position: 'top-end'
-                    });
-
-                    // Fetch and display recipes based on the detected vegetable
-                    fetchRecipes(vegetableName);
+                    const recipeCard = document.createElement('div');
+                    recipeCard.className = 'recipe-card';
+                    recipeCard.innerHTML = `
+                        <h4>${nutritionInfoData.name}</h4>
+                        <p>Calories: ${nutritionInfoData.nutrition.nutrients[0].amount}</p>
+                    `;
+                    recipeCard.addEventListener('click', () => showDetails(nutritionInfoData));
+                    recipeContainer.appendChild(recipeCard);
                 } else {
                     showAlert("Nutrition Not Found", `No nutritional information found for ${vegetableName}.`, "warning");
                 }
             } catch (error) {
                 console.error("Error fetching nutrition data:", error);
-                showAlert("Error", "There was an error retrieving nutrition information.", "error");
+                showAlert("Error", "There was an error retrieving nutritional information.", "error");
             }
+        }
+
+        function showDetails(nutritionData) {
+            mainContainer.style.display = 'none';
+            detailContainer.style.display = 'block';
+            detailTitle.innerText = nutritionData.name;
+            nutritionInfo.innerHTML = `<p>Calories: ${nutritionData.nutrition.nutrients[0].amount} ${nutritionData.nutrition.nutrients[0].unit}</p>`;
+            detailRecipeContainer.innerHTML = ""; // Clear previous details
+
+            // Show recipes based on detected vegetable
+            fetchRecipes(nutritionData.name);
         }
 
         async function fetchRecipes(vegetableName) {
             const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-            const recipesUrl = `https://api.spoonacular.com/recipes/complexSearch?query=${vegetableName}&apiKey=${apiKey}`;
+            const recipesUrl = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${vegetableName}&number=5&apiKey=${apiKey}`;
 
             try {
                 const response = await fetch(recipesUrl);
                 const recipes = await response.json();
-
-                displayRecipes(recipes.results);
+                displayRecipes(recipes);
             } catch (error) {
                 console.error("Error fetching recipes:", error);
                 showAlert("Error", "There was an error retrieving recipes.", "error");
@@ -238,7 +254,7 @@
         }
 
         function displayRecipes(recipes) {
-            recipeContainer.innerHTML = ""; // Clear previous results
+            detailRecipeContainer.innerHTML = ""; // Clear previous results
 
             recipes.forEach(recipe => {
                 const recipeCard = document.createElement('div');
@@ -246,10 +262,9 @@
                 recipeCard.innerHTML = `
                     <img src="${recipe.image}" alt="${recipe.title}">
                     <h4>${recipe.title}</h4>
-                    <p>Ready in ${recipe.readyInMinutes} minutes</p>
                 `;
                 recipeCard.addEventListener('click', () => showRecipeDetails(recipe.id));
-                recipeContainer.appendChild(recipeCard);
+                detailRecipeContainer.appendChild(recipeCard);
             });
         }
 
@@ -299,6 +314,11 @@
             speechSynthesis.speak(utterance);
         }
 
+        document.getElementById('back-button').addEventListener('click', () => {
+            detailContainer.style.display = 'none';
+            mainContainer.style.display = 'block';
+        });
+
         function showAlert(title, text, icon) {
             Swal.fire({
                 title: title,
@@ -306,7 +326,7 @@
                 icon: icon,
                 showConfirmButton: false,
                 timer: 3000,
-                width: '300px', // Set width for alerts
+                width: '300px',
                 position: 'top-end'
             });
         }

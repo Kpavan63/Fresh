@@ -19,7 +19,7 @@
         }
         .container {
             text-align: center;
-            max-width: 400px;
+            max-width: 600px;
             background: #fff;
             padding: 20px;
             border-radius: 8px;
@@ -51,6 +51,38 @@
             margin-top: 20px;
             text-align: left;
         }
+        .recipe-card {
+            display: inline-block;
+            width: 150px;
+            margin: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .recipe-card img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+        }
+        .recipe-card h4 {
+            font-size: 14px;
+            margin: 5px;
+        }
+        .recipe-card p {
+            font-size: 12px;
+            margin: 5px;
+            color: #666;
+        }
+        .recipe-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        #canvas {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -64,14 +96,19 @@
             <button id="detect-button">Detect & Get Nutrition Info</button>
         </div>
         <div id="result"></div>
+        <div class="recipe-container" id="recipe-container"></div>
+        <canvas id="canvas"></canvas>
     </div>
 
     <script>
         const video = document.getElementById('video');
         const resultDiv = document.getElementById('result');
+        const recipeContainer = document.getElementById('recipe-container');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
         let model;
         let currentStream;
-        let nutritionData = {}; // Object to store nutrition results in JSON format
+        let detectedVegetable = '';
 
         // Load the object detection model
         async function loadModel() {
@@ -104,8 +141,8 @@
 
         // Capture the current video frame
         document.getElementById('capture-button').addEventListener('click', () => {
-            // Show an alert that the capture is in process
-            showAlert("Capture", "Capturing the current frame...", "info");
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            showAlert("Capture", "Frame captured. Now, you can detect the vegetable!", "info");
         });
 
         // Detect the vegetable in the image
@@ -115,17 +152,22 @@
                 return;
             }
 
+            // Set canvas size to video size
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
             // Detect objects in the video frame
-            const predictions = await model.detect(video);
-            const vegetablePrediction = predictions.find(prediction =>
+            const predictions = await model.detect(canvas);
+            detectedVegetable = predictions.find(prediction =>
                 ["broccoli", "carrot", "tomato"].includes(prediction.class)
             );
 
-            if (vegetablePrediction) {
-                const vegetableName = vegetablePrediction.class;
+            if (detectedVegetable) {
+                const vegetableName = detectedVegetable.class;
                 showAlert("Vegetable Detected", `Detected: ${vegetableName}. Fetching nutrition data...`, "info");
 
-                // Spoonacular API call
+                // Spoonacular API call for nutrition data
                 const apiKey = "43060fcd39984991bdac8557ed4eeab8";
                 const apiUrl = `https://api.spoonacular.com/food/ingredients/search?query=${vegetableName}&number=1&apiKey=${apiKey}`;
 
@@ -140,9 +182,6 @@
                         const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
                         const nutritionResponse = await fetch(nutritionUrl);
                         const nutritionInfo = await nutritionResponse.json();
-
-                        // Store nutrition data in JSON format
-                        nutritionData[vegetableName] = nutritionInfo;
 
                         // Prepare nutrition info for display
                         let nutritionHtml = `<h3>${nutritionInfo.name} (per 100g)</h3>
@@ -164,6 +203,9 @@
                             showConfirmButton: false,
                             timer: 5000
                         });
+
+                        // Fetch recipe suggestions
+                        fetchRecipes(vegetableName);
                     } else {
                         showAlert("No Data Found", "No nutritional information found for this vegetable.", "warning");
                     }
@@ -176,19 +218,43 @@
             }
         });
 
-        // SweetAlert wrapper to customize positioning
-        function showAlert(title, text, icon) {
-            Swal.fire({
-                title: title,
-                text: text,
-                icon: icon,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 3000
-            });
-        }
+        // Function to fetch recipes based on the vegetable name
+        async function fetchRecipes(vegetableName) {
+            const apiKey = "43060fcd39984991bdac8557ed4eeab8";
+            const recipeUrl = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${vegetableName}&number=3&apiKey=${apiKey}`;
+            try {
+                const response = await fetch(recipeUrl);
+                const recipes = await response.json();
 
-        loadModel();
-    </script>
+                // Clear previous recipes
+                recipeContainer.innerHTML = '';
+
+                // Display recipes in card format
+                recipes.forEach(recipe => {
+                    const recipeCard = document.createElement('div');
+                    recipeCard.classList.add('recipe-card');
+                    recipeCard.innerHTML = `
+                        <img src="${recipe.image}" alt="${recipe.title}">
+                        <h4>${recipe.title}</h4>
+                        <p>Used in ${recipe.usedIngredientCount} ingredients</p>
+                    `;
+                    recipeContainer.appendChild(recipeCard);
+                });
+
+                //
+                     // Function to display alerts using SweetAlert
+    function showAlert(title, text, icon) {
+        Swal.fire({
+            title: title,
+            text: text,
+            icon: icon,
+            showConfirmButton: false,
+            timer: 3000
+        });
+    }
+
+    // Load the model on page load
+    window.onload = loadModel;
+</script>
 </body>
 </html>

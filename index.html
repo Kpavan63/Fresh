@@ -109,7 +109,7 @@
         </div>
         <div id="result"></div>
         <div class="recipe-container" id="recipe-container"></div>
-        <canvas id="canvas"></canvas>
+        <canvas id="canvas" style="display:none;"></canvas> <!-- Canvas for capturing image -->
         <div class="loader" id="loader"></div> <!-- Loader element -->
     </div>
 
@@ -126,10 +126,11 @@
         function setup() {
             video = createCapture(VIDEO);
             video.size(640, 480);
-            video.hide();
+            video.hide(); // Hide the video element
 
-            canvas.width = video.width;
-            canvas.height = video.height;
+            // Set the canvas size
+            canvas.width = 640; 
+            canvas.height = 480;
 
             detector = ml5.objectDetector('cocossd', modelReady);
         }

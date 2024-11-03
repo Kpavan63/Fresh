@@ -64,6 +64,29 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .card {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            width: 150px;
+            text-align: center;
+        }
+        .card h4 {
+            margin: 10px 0;
+            font-size: 18px;
+        }
+        .card p {
+            font-size: 14px;
+            color: #555;
+        }
     </style>
 </head>
 <body>
@@ -74,8 +97,9 @@
             <button id="capture-button">Capture</button>
             <button id="switch-camera-button">Switch Camera</button>
         </div>
-        <div id="result"></div>
         <div class="loader" id="loader"></div>
+        <div id="result"></div>
+        <div class="suggestions" id="suggestions"></div>
         <canvas id="canvas" style="display:none;"></canvas>
     </div>
 
@@ -118,11 +142,60 @@
             // Simulating a delay for detection
             setTimeout(() => {
                 loader.style.display = 'none'; // Hide loader
-                // Here you can implement your vegetable detection logic
-                // For now, just show an alert with a placeholder message
-                showAlert("Detected", `Vegetable detected!`, "success");
-                // You can later fetch actual nutritional data based on the detected vegetable
+
+                // For demonstration, assume we detected a vegetable (e.g., "Carrot").
+                const detectedVegetable = "Carrot";
+                showAlert("Detected", `${detectedVegetable} detected!`, "success");
+
+                // Show nutritional information and suggestions
+                showVegetableUsage(detectedVegetable);
+                showSuggestions(detectedVegetable);
             }, 2000);
+        }
+
+        function showVegetableUsage(vegetable) {
+            const usage = {
+                "Carrot": "Rich in Vitamin A, great for eyesight.",
+                "Tomato": "High in antioxidants, good for heart health.",
+                "Spinach": "Excellent source of iron, beneficial for blood health."
+            };
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<h3>Usage:</h3><p>${usage[vegetable] || "N/A"}</p>`;
+        }
+
+        function showSuggestions(vegetable) {
+            const suggestions = {
+                "Carrot": [
+                    { title: "Carrot Salad", description: "Fresh salad with carrots." },
+                    { title: "Carrot Soup", description: "Warm and comforting." },
+                    { title: "Carrot Cake", description: "Delicious dessert." }
+                ],
+                "Tomato": [
+                    { title: "Tomato Sauce", description: "Perfect for pasta." },
+                    { title: "Caprese Salad", description: "Tomato and mozzarella." },
+                    { title: "Tomato Soup", description: "Classic comfort food." }
+                ],
+                "Spinach": [
+                    { title: "Spinach Quiche", description: "Savory pie with spinach." },
+                    { title: "Spinach Smoothie", description: "Healthy drink." },
+                    { title: "Sauteed Spinach", description: "Quick and easy side." }
+                ]
+            };
+
+            const suggestionsDiv = document.getElementById('suggestions');
+            suggestionsDiv.innerHTML = ''; // Clear previous suggestions
+
+            const vegetableSuggestions = suggestions[vegetable] || [];
+            vegetableSuggestions.forEach(suggestion => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h4>${suggestion.title}</h4>
+                    <p>${suggestion.description}</p>
+                `;
+                suggestionsDiv.appendChild(card);
+            });
         }
 
         document.getElementById('switch-camera-button').addEventListener('click', () => {

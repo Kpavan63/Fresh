@@ -110,7 +110,6 @@
         const context = canvas.getContext('2d');
         let model;
         let currentStream;
-        let detectedVegetable = '';
 
         // Load the object detection model
         async function loadModel() {
@@ -166,64 +165,72 @@
 
             // Detect objects in the video frame
             const predictions = await model.detect(canvas);
-            detectedVegetable = predictions.find(prediction =>
+            const detectedVegetables = predictions.filter(prediction =>
                 ["broccoli", "carrot", "tomato"].includes(prediction.class)
             );
 
-            if (detectedVegetable) {
-                const vegetableName = detectedVegetable.class;
-                showAlert("Vegetable Detected", `Detected: ${vegetableName}. Fetching nutrition data...`, "info");
+            if (detectedVegetables.length > 0) {
+                let vegetableNames = detectedVegetables.map(v => v.class).join(', ');
+                showAlert("Vegetables Detected", `Detected: ${vegetableNames}. Fetching nutrition data...`, "info");
 
-                // Spoonacular API call for nutrition data
-                const apiKey = "43060fcd39984991bdac8557ed4eeab8";
-                const apiUrl = `https://api.spoonacular.com/food/ingredients/search?query=${vegetableName}&number=1&apiKey=${apiKey}`;
-
-                try {
-                    const response = await fetch(apiUrl);
-                    const data = await response.json();
-
-                    if (data.results && data.results.length > 0) {
-                        const ingredientId = data.results[0].id;
-
-                        // Fetch detailed nutritional info using ingredient ID
-                        const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
-                        const nutritionResponse = await fetch(nutritionUrl);
-                        const nutritionInfo = await nutritionResponse.json();
-
-                        // Prepare nutrition info for display
-                        let nutritionHtml = `<h3>${nutritionInfo.name} (per 100g)</h3>
-                                             <p><strong>Calories:</strong> ${nutritionInfo.nutrition.nutrients[0].amount} ${nutritionInfo.nutrition.nutrients[0].unit}</p>
-                                             <ul>`;
-                        nutritionInfo.nutrition.nutrients.forEach(nutrient => {
-                            nutritionHtml += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
-                        });
-                        nutritionHtml += `</ul>`;
-
-                        resultDiv.innerHTML = nutritionHtml;
-
-                        // Show nutritional info in a popup
-                        Swal.fire({
-                            title: `${nutritionInfo.name} Nutrition Info`,
-                            html: nutritionHtml,
-                            icon: 'success',
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 5000
-                        });
-
-                        // Fetch recipe suggestions
-                        fetchRecipes(vegetableName);
-                    } else {
-                        showAlert("No Data Found", "No nutritional information found for this vegetable.", "warning");
-                    }
-                } catch (error) {
-                    console.error("Error fetching data:", error);
-                    showAlert("Error", "There was an error retrieving the data.", "error");
-                }
+                // Fetch nutritional information for each detected vegetable
+                detectedVegetables.forEach(vegetable => {
+                    fetchNutritionData(vegetable.class);
+                });
             } else {
                 showAlert("Vegetable Not Detected", "Please try again or adjust the vegetable position.", "warning");
             }
         });
+
+        // Function to fetch nutritional information
+        async function fetchNutritionData(vegetableName) {
+            const apiKey = "43060fcd39984991bdac8557ed4eeab8";
+            const apiUrl = `https://api.spoonacular.com/food/ingredients/search?query=${vegetableName}&number=1&apiKey=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    const ingredientId = data.results[0].id;
+
+                    // Fetch detailed nutritional info using ingredient ID
+                    const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
+                    const nutritionResponse = await fetch(nutritionUrl);
+                    const nutritionInfo = await nutritionResponse.json();
+
+                    // Prepare nutrition info for display
+                    let nutritionHtml = `<h3>${nutritionInfo.name} (per 100g)</h3>
+                                         <p><strong>Calories:</strong> ${nutritionInfo.nutrition.nutrients[0].amount} ${nutritionInfo.nutrition.nutrients[0].unit}</p>
+                                         <ul>`;
+                    nutritionInfo.nutrition.nutrients.forEach(nutrient => {
+                        nutritionHtml += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
+                    });
+                    nutritionHtml += `</ul>`;
+
+                    resultDiv.innerHTML += nutritionHtml; // Append results
+
+                    // Show nutritional info in a smaller popup
+                    Swal.fire({
+                        title: `${nutritionInfo.name} Nutrition Info`,
+                        html: nutritionHtml,
+                        icon: 'success',
+                        width: '400px', // Set a width for the popup
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 5000
+                    });
+
+                    // Fetch recipe suggestions
+                    fetchRecipes(vegetableName);
+                } else {
+                    showAlert("No Data Found", `No nutritional information found for ${vegetableName}.`, "warning");
+                }
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                showAlert("Error", "There was an error retrieving the data.", "error");
+            }
+        }
 
         // Function to fetch recipes based on the vegetable name
         async function fetchRecipes(vegetableName) {
@@ -263,6 +270,7 @@
                 icon: icon,
                 showConfirmButton: false,
                 timer: 3000,
+                width: '300px', // Set width for alerts
                 position: 'top-end'
             });
         }

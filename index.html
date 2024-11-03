@@ -60,6 +60,7 @@
         <div>
             <button id="front-camera">Front Camera</button>
             <button id="back-camera">Back Camera</button>
+            <button id="capture-button">Capture</button>
             <button id="detect-button">Detect & Get Nutrition Info</button>
         </div>
         <div id="result"></div>
@@ -70,6 +71,7 @@
         const resultDiv = document.getElementById('result');
         let model;
         let currentStream;
+        let nutritionData = {}; // Object to store nutrition results in JSON format
 
         // Load the object detection model
         async function loadModel() {
@@ -98,6 +100,12 @@
         // Switch to back camera
         document.getElementById('back-camera').addEventListener('click', () => {
             startCamera({ video: { facingMode: "environment" } });
+        });
+
+        // Capture the current video frame
+        document.getElementById('capture-button').addEventListener('click', () => {
+            // Show an alert that the capture is in process
+            showAlert("Capture", "Capturing the current frame...", "info");
         });
 
         // Detect the vegetable in the image
@@ -131,20 +139,26 @@
                         // Fetch detailed nutritional info using ingredient ID
                         const nutritionUrl = `https://api.spoonacular.com/food/ingredients/${ingredientId}/information?amount=100&apiKey=${apiKey}`;
                         const nutritionResponse = await fetch(nutritionUrl);
-                        const nutritionData = await nutritionResponse.json();
+                        const nutritionInfo = await nutritionResponse.json();
 
-                        let nutritionInfo = `<h3>${nutritionData.name} (per 100g)</h3>
-                                             <p><strong>Calories:</strong> ${nutritionData.nutrition.nutrients[0].amount} ${nutritionData.nutrition.nutrients[0].unit}</p>
+                        // Store nutrition data in JSON format
+                        nutritionData[vegetableName] = nutritionInfo;
+
+                        // Prepare nutrition info for display
+                        let nutritionHtml = `<h3>${nutritionInfo.name} (per 100g)</h3>
+                                             <p><strong>Calories:</strong> ${nutritionInfo.nutrition.nutrients[0].amount} ${nutritionInfo.nutrition.nutrients[0].unit}</p>
                                              <ul>`;
-                        nutritionData.nutrition.nutrients.forEach(nutrient => {
-                            nutritionInfo += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
+                        nutritionInfo.nutrition.nutrients.forEach(nutrient => {
+                            nutritionHtml += `<li><strong>${nutrient.name}:</strong> ${nutrient.amount} ${nutrient.unit}</li>`;
                         });
-                        nutritionInfo += `</ul>`;
+                        nutritionHtml += `</ul>`;
 
-                        resultDiv.innerHTML = nutritionInfo;
+                        resultDiv.innerHTML = nutritionHtml;
+
+                        // Show nutritional info in a popup
                         Swal.fire({
-                            title: `${nutritionData.name} Nutrition Info`,
-                            html: nutritionInfo,
+                            title: `${nutritionInfo.name} Nutrition Info`,
+                            html: nutritionHtml,
                             icon: 'success',
                             position: 'top-end',
                             showConfirmButton: false,
